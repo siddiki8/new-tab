@@ -224,7 +224,7 @@
     ════════════════════════════════════════════════════════ */
     .bottom-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 12px;
     }
 
@@ -325,6 +325,89 @@
       transition: color 0.14s, opacity 0.14s;
       flex-shrink: 0;
     }
+
+    /* ── Salah times card ────────────────────────────────────── */
+    .salah-card {
+      display: flex;
+      flex-direction: column;
+    }
+    .salah-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--orange);
+    }
+    .salah-hdr {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 12px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .salah-hijri {
+      margin-left: auto;
+      color: var(--txt-muted);
+      font-size: 8px;
+      white-space: nowrap;
+    }
+    .salah-list {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .salah-row {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.14s;
+      min-height: 0;
+      gap: 6px;
+    }
+    .salah-row:last-child { border-bottom: none; }
+    .salah-row.next-prayer { background: var(--orange-dim); }
+    .salah-row.next-prayer .salah-name { color: var(--orange); }
+    .salah-row.next-prayer .salah-iqamah { color: var(--txt-display); }
+    .salah-name {
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--txt-sec);
+      transition: color 0.14s;
+      flex-shrink: 0;
+    }
+    .salah-times-col {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 1px;
+    }
+    .salah-adhan {
+      font-family: 'Space Mono', monospace;
+      font-size: 8.5px;
+      color: var(--txt-muted);
+    }
+    .salah-iqamah {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--txt-sec);
+      transition: color 0.14s;
+    }
+    .salah-next-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--orange);
+      flex-shrink: 0;
+      opacity: 0;
+    }
+    .salah-row.next-prayer .salah-next-dot { opacity: 1; }
   </style>
 </head>
 <body>
@@ -500,6 +583,18 @@
     </div>
   </div>
 
+  <!-- PRAYER TIMES -->
+  <div class="card salah-card">
+    <div class="salah-hdr">
+      <span class="li-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg></span>
+      <span class="lbl">Prayer Times</span>
+      <span class="salah-hijri lbl" id="salah-hijri"></span>
+    </div>
+    <div class="salah-list" id="salah-list">
+      <!-- populated by JS -->
+    </div>
+  </div>
+
 </div><!-- /bottom-row -->
 
 
@@ -643,6 +738,78 @@ async function loadWeather() {
   }
 }
 loadWeather();
+
+/* ─── Salah Times ───────────────────────────────────────── */
+const PRAYERS = [
+  { key: 'fajr',    label: 'Fajr'    },
+  { key: 'zuhr',    label: 'Dhuhr'   },
+  { key: 'asr',     label: 'Asr'     },
+  { key: 'maghrib', label: 'Maghrib' },
+  { key: 'isha',    label: 'Isha'    },
+];
+
+function parseTime12(str) {
+  if (!str) return null;
+  const m = str.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+  if (!m) return null;
+  let h = parseInt(m[1]), min = parseInt(m[2]);
+  const period = m[3].toUpperCase();
+  if (period === 'PM' && h !== 12) h += 12;
+  if (period === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+function fmtTime(str) {
+  // "5:21AM" → "5:21 AM"
+  return str ? str.replace(/(AM|PM)$/i, ' $1') : '—';
+}
+
+function nextPrayerKey(iqamah) {
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  for (const p of PRAYERS) {
+    const t = parseTime12(iqamah[p.key]);
+    if (t !== null && t > nowMin) return p.key;
+  }
+  return 'fajr'; // wrap to next day
+}
+
+async function loadSalah() {
+  try {
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+    const url = `https://salah-times.a-siddiki.workers.dev/?from_date=${today}&to_date=${today}&masjid_detail=no`;
+    const res  = await fetch(url);
+    const json = await res.json();
+
+    const d      = json.data || json;
+    const salah  = (d.salah_times  || d.salah  || [])[0] || {};
+    const iqamah = (d.iqamah_times || d.iqamah || [])[0] || {};
+
+    const hijri = [salah.hijri_date, salah.hijri_month].filter(Boolean).join(' ');
+    document.getElementById('salah-hijri').textContent = hijri;
+
+    const nextKey = nextPrayerKey(iqamah);
+    const list = document.getElementById('salah-list');
+    list.innerHTML = '';
+
+    for (const p of PRAYERS) {
+      const row = document.createElement('div');
+      row.className = 'salah-row' + (p.key === nextKey ? ' next-prayer' : '');
+      row.innerHTML = `
+        <span class="salah-next-dot"></span>
+        <span class="salah-name">${p.label}</span>
+        <div class="salah-times-col">
+          <span class="salah-adhan">${fmtTime(salah[p.key])}</span>
+          <span class="salah-iqamah">${fmtTime(iqamah[p.key])}</span>
+        </div>`;
+      list.appendChild(row);
+    }
+  } catch (e) {
+    const list = document.getElementById('salah-list');
+    list.innerHTML = '<div class="salah-row"><span class="salah-name" style="color:var(--txt-muted);font-size:9px">Unavailable</span></div>';
+  }
+}
+loadSalah();
 </script>
 </body>
 </html>
