@@ -505,29 +505,8 @@
 
 <script>
 /* ─── Greetings ─────────────────────────────────────────── */
-const GREETINGS = [
-  'Hello,', 'Salaam,', 'Hey,', 'Ahlan,', 'Marhaba,',
-  'Hola,', 'Bonjour,', 'Ciao,', 'Hallo,', 'Oi,',
-  'Yo,', "What's good,", 'Welcome,', 'Greetings,',
-  'Namaste,', 'Shalom,', 'Howdy,', 'Sup,',
-  'Salam,', 'Good to see you,',
-];
-
-let greetIdx = 0;
 const greetEl = document.getElementById('greeting-word');
-
-function cycleGreeting() {
-  greetEl.style.opacity = '0';
-  setTimeout(() => {
-    greetIdx = (greetIdx + 1) % GREETINGS.length;
-    greetEl.textContent = GREETINGS[greetIdx];
-    greetEl.style.opacity = '1';
-  }, 260);
-}
-// Randomize starting greeting
-greetIdx = Math.floor(Math.random() * GREETINGS.length);
-greetEl.textContent = GREETINGS[greetIdx];
-setInterval(cycleGreeting, 4500);
+greetEl.textContent = 'السلام';
 
 /* ─── Clock & Date ──────────────────────────────────────── */
 const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -547,8 +526,8 @@ function tick() {
     `${DAYS[now.getDay()]} · ${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
 
   const tag =
-    h24 < 12 ? 'Good morning' :
-    h24 < 17 ? 'Good afternoon' : 'Good evening';
+    h24 < 12 ? 'صباح الخير' :
+    h24 < 17 ? 'مساء الخير' : 'تصبح على خير';
   document.getElementById('greeting-tag').textContent = tag;
 }
 tick();
