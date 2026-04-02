@@ -135,34 +135,22 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 2px;
+      padding: 14px 10px 12px;
+      gap: 6px;
     }
-    .clock-time {
-      font-family: 'Doto', monospace;
-      font-size: clamp(52px, 6vw, 88px);
-      font-weight: 700;
-      color: var(--txt-display);
-      line-height: 1;
-      letter-spacing: -0.01em;
-    }
-    .clock-colon {
-      color: var(--orange);
-      animation: blink 1s step-start infinite;
-    }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-    .clock-ampm {
-      font-family: 'Space Mono', monospace;
-      font-size: 11px;
-      color: var(--txt-sec);
-      letter-spacing: 0.14em;
-      margin-top: 4px;
+    #analogClock {
+      width: 100%;
+      max-width: 180px;
+      height: auto;
+      aspect-ratio: 1;
+      display: block;
     }
     .clock-date {
       font-family: 'Space Mono', monospace;
-      font-size: 10px;
+      font-size: 9px;
       color: var(--txt-muted);
       letter-spacing: 0.06em;
-      margin-top: 2px;
+      text-align: center;
     }
 
     /* ── Weather card ────────────────────────────────────────── */
@@ -426,10 +414,7 @@
 
   <!-- Clock -->
   <div class="card clock-card">
-    <div class="clock-time">
-      <span id="clk-h">00</span><span class="clock-colon">:</span><span id="clk-m">00</span>
-    </div>
-    <div class="clock-ampm" id="clk-ap">AM</div>
+    <canvas id="analogClock" width="180" height="180"></canvas>
     <div class="clock-date" id="clk-date">—</div>
   </div>
 
@@ -461,7 +446,7 @@
 
   <!-- Mini chart -->
   <div class="card chart-card">
-    <span class="lbl">7-Day · °F</span>
+    <span class="lbl">7-Day · °F · Rain%</span>
     <div class="chart-wrap">
       <canvas id="miniChart"></canvas>
     </div>
@@ -607,26 +592,114 @@ greetEl.textContent = 'السلام';
 const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-function tick() {
-  const now  = new Date();
-  const h24  = now.getHours();
-  const ampm = h24 >= 12 ? 'PM' : 'AM';
-  const h    = h24 % 12 || 12;
-  const m    = now.getMinutes();
+(function initAnalogClock() {
+  const canvas = document.getElementById('analogClock');
+  const ctx    = canvas.getContext('2d');
 
-  document.getElementById('clk-h').textContent  = String(h).padStart(2,'0');
-  document.getElementById('clk-m').textContent  = String(m).padStart(2,'0');
-  document.getElementById('clk-ap').textContent = ampm;
-  document.getElementById('clk-date').textContent =
-    `${DAYS[now.getDay()]} · ${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+  function draw() {
+    const now = new Date();
+    const h24 = now.getHours();
+    const m   = now.getMinutes();
+    const s   = now.getSeconds();
+    const ms  = now.getMilliseconds();
 
-  const tag =
-    h24 < 12 ? 'صباح الخير' :
-    h24 < 17 ? 'مساء الخير' : 'تصبح على خير';
-  document.getElementById('greeting-tag').textContent = tag;
-}
-tick();
-setInterval(tick, 1000);
+    const W  = canvas.width;
+    const H  = canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const R  = Math.min(W, H) / 2 - 6;
+
+    ctx.clearRect(0, 0, W, H);
+
+    /* outer dot ring – 60 minute markers */
+    for (let i = 0; i < 60; i++) {
+      const angle  = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      const isHour    = i % 5 === 0;
+      const dotRadius = isHour ? 2.5 : 1.2;
+      const dist   = R;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      ctx.beginPath();
+      ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+      if (i === 0) {
+        ctx.fillStyle = '#f97316';           /* 12 o'clock – orange */
+      } else if (isHour) {
+        ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.16)';
+      }
+      ctx.fill();
+    }
+
+    /* decorative inner ring – small dashes between hour positions */
+    for (let i = 0; i < 60; i++) {
+      if (i % 5 === 0) continue;
+      const angle  = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      const r0 = R * 0.78;
+      const r1 = R * 0.85;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(angle) * r0, cy + Math.sin(angle) * r0);
+      ctx.lineTo(cx + Math.cos(angle) * r1, cy + Math.sin(angle) * r1);
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+      ctx.lineWidth   = 1;
+      ctx.stroke();
+    }
+
+    /* smooth angles */
+    const secA  = ((s + ms / 1000) / 60) * Math.PI * 2 - Math.PI / 2;
+    const minA  = ((m + (s + ms / 1000) / 60) / 60) * Math.PI * 2 - Math.PI / 2;
+    const hourA = (((h24 % 12) + m / 60) / 12) * Math.PI * 2 - Math.PI / 2;
+
+    /* minute hand */
+    ctx.beginPath();
+    ctx.moveTo(cx - Math.cos(minA) * R * 0.12, cy - Math.sin(minA) * R * 0.12);
+    ctx.lineTo(cx + Math.cos(minA) * R * 0.68, cy + Math.sin(minA) * R * 0.68);
+    ctx.strokeStyle = 'rgba(232,232,232,0.88)';
+    ctx.lineWidth   = 1.5;
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+
+    /* hour hand */
+    ctx.beginPath();
+    ctx.moveTo(cx - Math.cos(hourA) * R * 0.12, cy - Math.sin(hourA) * R * 0.12);
+    ctx.lineTo(cx + Math.cos(hourA) * R * 0.45, cy + Math.sin(hourA) * R * 0.45);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth   = 2.5;
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+
+    /* second hand – thin orange needle + tail */
+    ctx.beginPath();
+    ctx.moveTo(cx - Math.cos(secA) * R * 0.22, cy - Math.sin(secA) * R * 0.22);
+    ctx.lineTo(cx + Math.cos(secA) * R * 0.76, cy + Math.sin(secA) * R * 0.76);
+    ctx.strokeStyle = '#f97316';
+    ctx.lineWidth   = 0.9;
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+
+    /* center hub – orange ring + white dot */
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#f97316';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 1.2, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+
+    /* date + greeting */
+    document.getElementById('clk-date').textContent =
+      `${DAYS[now.getDay()]} · ${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+    const tag =
+      h24 < 12 ? 'صباح الخير' :
+      h24 < 17 ? 'مساء الخير' : 'تصبح على خير';
+    document.getElementById('greeting-tag').textContent = tag;
+
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+}());
 
 /* ─── Weather description ───────────────────────────────── */
 function wdesc(c) {
@@ -642,7 +715,7 @@ function wdesc(c) {
 
 /* ─── Mini sparkline chart ──────────────────────────────── */
 let chart = null;
-function buildChart(labels, highs, lows) {
+function buildChart(labels, highs, lows, precip) {
   const ctx = document.getElementById('miniChart').getContext('2d');
   if (chart) chart.destroy();
   chart = new Chart(ctx, {
@@ -651,6 +724,7 @@ function buildChart(labels, highs, lows) {
       labels,
       datasets: [
         {
+          type: 'line',
           data: highs,
           borderColor: 'rgba(249,115,22,0.85)',
           borderWidth: 1.5,
@@ -658,8 +732,10 @@ function buildChart(labels, highs, lows) {
           pointBackgroundColor: 'rgba(249,115,22,1)',
           tension: 0.4,
           fill: { target: 1, above: 'rgba(249,115,22,0.05)' },
+          yAxisID: 'y',
         },
         {
+          type: 'line',
           data: lows,
           borderColor: 'rgba(50,50,50,0.9)',
           borderWidth: 1,
@@ -667,6 +743,16 @@ function buildChart(labels, highs, lows) {
           pointBackgroundColor: 'rgba(60,60,60,1)',
           tension: 0.4,
           fill: false,
+          yAxisID: 'y',
+        },
+        {
+          type: 'bar',
+          data: precip,
+          backgroundColor: 'rgba(91,155,246,0.22)',
+          borderColor: 'rgba(91,155,246,0.55)',
+          borderWidth: 1,
+          borderRadius: 2,
+          yAxisID: 'y1',
         }
       ]
     },
@@ -683,7 +769,12 @@ function buildChart(labels, highs, lows) {
           bodyColor: '#e8e8e8',
           titleFont:  { family: 'Space Mono', size: 9 },
           bodyFont:   { family: 'Space Mono', size: 10 },
-          callbacks: { label: c => ` ${c.datasetIndex === 0 ? 'Hi':'Lo'}: ${c.raw}°` }
+          callbacks: {
+            label: c => {
+              if (c.datasetIndex === 2) return ` Rain: ${c.raw}%`;
+              return ` ${c.datasetIndex === 0 ? 'Hi':'Lo'}: ${c.raw}°`;
+            }
+          }
         }
       },
       scales: {
@@ -696,6 +787,14 @@ function buildChart(labels, highs, lows) {
           grid: { color: '#111' },
           border: { display: false },
           ticks: { color: '#333', font: { family: 'Space Mono', size: 8 }, maxTicksLimit: 4, callback: v => v + '°' }
+        },
+        y1: {
+          position: 'right',
+          min: 0,
+          max: 100,
+          grid: { display: false },
+          border: { display: false },
+          ticks: { color: '#333', font: { family: 'Space Mono', size: 8 }, maxTicksLimit: 3, callback: v => v + '%' }
         }
       }
     }
@@ -709,7 +808,7 @@ async function loadWeather() {
       'https://api.open-meteo.com/v1/forecast' +
       '?latitude=40.8204&longitude=-74.1046' +
       '&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,apparent_temperature' +
-      '&daily=temperature_2m_max,temperature_2m_min' +
+      '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
       '&timezone=America%2FNew_York' +
       '&temperature_unit=fahrenheit' +
       '&wind_speed_unit=mph' +
@@ -731,7 +830,8 @@ async function loadWeather() {
     });
     buildChart(labels,
       data.daily.temperature_2m_max.map(Math.round),
-      data.daily.temperature_2m_min.map(Math.round)
+      data.daily.temperature_2m_min.map(Math.round),
+      data.daily.precipitation_probability_max
     );
   } catch (e) {
     document.getElementById('w-cond').textContent = 'Unavailable';
